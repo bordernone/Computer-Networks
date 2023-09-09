@@ -29,14 +29,14 @@ long int fileSize(FILE *fp) {
     long int current = ftell(fp); // Copy the current file position
     // Seek to the end of the file and get the position
     if (fseek(fp, 0, SEEK_END) != 0) {
-        printf("Error seeking to end of file\n");
+        fprintf(stderr, "Error seeking to end of file\n");
         exit(1);
     }
     long int size = ftell(fp); // Copy the file position as the size
 
     // Seek back to the original position
     if (fseek(fp, current, SEEK_SET) != 0) {
-        printf("Error seeking to current position\n");
+        fprintf(stderr, "Error seeking to current position\n");
         exit(1);
     }
     return size;
@@ -45,7 +45,7 @@ long int fileSize(FILE *fp) {
 int main(int argc, char *argv[]) {
     // Check if the correct number of command-line arguments are provided
     if (argc != 2) {
-        printf("Usage: %s <pcap_file>\n", argv[0]);
+        fprintf(stderr, "Usage: %s <pcap_file>\n", argv[0]);
         exit(1);
     }
 
@@ -55,13 +55,13 @@ int main(int argc, char *argv[]) {
     // Open the pcap file for reading in binary mode
     FILE *fp = fopen(pcap_file, "rb");
     if (fp == NULL) {
-        printf("Error opening file %s\n", pcap_file);
+        fprintf(stderr, "Error opening file %s\n", pcap_file);
         exit(1);
     }
 
     // Skip the global header
     if (fseek(fp, GLOBAL_HEADER_SIZE, SEEK_SET) != 0) {
-        printf("Error seeking to offset 24\n");
+        fprintf(stderr, "Error seeking to offset %d\n", GLOBAL_HEADER_SIZE);
         exit(1);
     }
 
@@ -70,24 +70,24 @@ int main(int argc, char *argv[]) {
 
     // Loop through the file until the end is reached
     while (ftell(fp) < size) {
-        printf("\n----------------------------\n");
+        fprintf(stderr, "\n----------------------------\n");
 
         // Skip the Ethernet and IP headers to reach the UDP header
         if (fseek(fp, RECORD_HEADER_SIZE + ETHERNET_HEADER_SIZE + IP_HEADER_SIZE, SEEK_CUR) != 0) {
-            printf("Error seeking to offset %d\n", RECORD_HEADER_SIZE + ETHERNET_HEADER_SIZE + IP_HEADER_SIZE);
+            fprintf(stderr, "Error seeking to offset %d\n", RECORD_HEADER_SIZE + ETHERNET_HEADER_SIZE + IP_HEADER_SIZE);
             exit(1);
         }
 
         // Allocate memory for a UDP packet
         struct UDPPacket *packet = malloc(sizeof(struct UDPPacket));
         if (packet == NULL) {
-            printf("Error allocating memory for packet\n");
+            fprintf(stderr, "Error allocating memory for packet\n");
             exit(1);
         }
 
         // Read the UDP header from the file
         if (fread(&(packet->header), sizeof(struct UDPHeader), 1, fp) != 1) {
-            printf("Error reading packet header\n");
+            fprintf(stderr, "Error reading packet header\n");
             exit(1);
         }
 
@@ -109,13 +109,13 @@ int main(int argc, char *argv[]) {
         // Allocate memory for the UDP data
         packet->data = malloc(dataSize);
         if (packet->data == NULL) {
-            printf("Error allocating memory for packet data\n");
+            fprintf(stderr, "Error allocating memory for packet data\n");
             exit(1);
         }
 
         // Read the UDP data from the file
         if (fread(packet->data, dataSize, 1, fp) != 1) {
-            printf("Error reading packet data\n");
+            fprintf(stderr, "Error reading packet data\n");
             exit(1);
         }
 
