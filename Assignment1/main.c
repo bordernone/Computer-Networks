@@ -4,6 +4,11 @@
 #include <stdint.h>
 #include <ctype.h>
 
+#define GLOBAL_HEADER_SIZE 24
+#define RECORD_HEADER_SIZE 16
+#define ETHERNET_HEADER_SIZE 14
+#define IP_HEADER_SIZE 20
+
 // Define the structure for the UDP header
 // Adapted from https://sites.uclouvain.be/SystInfo/usr/include/netinet/udp.h.html
 struct UDPHeader {
@@ -54,8 +59,8 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
-    // Skip the pcap file header (assuming pcap file format)
-    if (fseek(fp, 24, SEEK_SET) != 0) {
+    // Skip the global header
+    if (fseek(fp, GLOBAL_HEADER_SIZE, SEEK_SET) != 0) {
         printf("Error seeking to offset 24\n");
         exit(1);
     }
@@ -65,9 +70,11 @@ int main(int argc, char *argv[]) {
 
     // Loop through the file until the end is reached
     while (ftell(fp) < size) {
+        printf("\n----------------------------\n");
+
         // Skip the Ethernet and IP headers to reach the UDP header
-        if (fseek(fp, 50, SEEK_CUR) != 0) {
-            printf("Error seeking to offset 50\n");
+        if (fseek(fp, RECORD_HEADER_SIZE + ETHERNET_HEADER_SIZE + IP_HEADER_SIZE, SEEK_CUR) != 0) {
+            printf("Error seeking to offset %d\n", RECORD_HEADER_SIZE + ETHERNET_HEADER_SIZE + IP_HEADER_SIZE);
             exit(1);
         }
 
@@ -91,8 +98,8 @@ int main(int argc, char *argv[]) {
         packet->header.checksum = ntohs(packet->header.checksum);
 
         // Print UDP header information
-        printf("Source Port: %u\n", packet->header.src_port);
-        printf("Destination Port: %u\n", packet->header.dst_port);
+        printf("Src Port: %u\n", packet->header.src_port);
+        printf("Des Port: %u\n", packet->header.dst_port);
         printf("UDP Packet Length: %u\n", packet->header.len);
         printf("Checksum: 0x%X\n", packet->header.checksum);
 
@@ -117,7 +124,7 @@ int main(int argc, char *argv[]) {
             printf("%c", isprint(packet->data[i]) ? packet->data[i] : '.'); // isprint() checks if the character is printable
         }
 
-        printf("\n ---------------------------- \n");
+        printf("\n----------------------------\n");
 
         // Free allocated memory for data and packet
         free(packet->data);
