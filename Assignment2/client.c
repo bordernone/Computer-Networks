@@ -24,18 +24,15 @@ int main() {
     struct sockaddr_in serverAddr;
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_port = htons(SERVER_PORT);
-    serverAddr.sin_addr.s_addr = INADDR_ANY;
+    serverAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
 
-    while (1) {
-        char buffer[1024];
-        printf("Enter time request: ");
-        fgets(buffer, sizeof(buffer), stdin);
+    char requestString[] = "Time request";
 
-        sendto(clientFD, buffer, sizeof(buffer), 0, (struct sockaddr *)&serverAddr, sizeof(serverAddr));
+    sendto(clientFD, requestString, sizeof(requestString), 0, (struct sockaddr *)&serverAddr, sizeof(serverAddr));
+    char responseString[1024];
+    recvfrom(clientFD, responseString, sizeof(responseString), 0, 0, 0);
 
-        recvfrom(clientFD, buffer, sizeof(buffer), 0, 0, 0);
-        printf("Time: %s\n", buffer);
-    }
+    printf("Server time: %s\n", responseString);
 
     // Close connection
     close(clientFD);

@@ -30,6 +30,8 @@ int main() {
     if (bind(serverFD, (struct sockaddr *)&serverAddr, sizeof(serverAddr)) < 0) {
         fprintf(stderr, "Error binding socket\n");
         exit(1);
+    } else {
+        printf("Time server started:\n");
     }
 
     struct sockaddr_in clientAddr;
