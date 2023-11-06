@@ -40,8 +40,21 @@ int main() {
     char buffer[256];
     while (1) {
         printf("Enter a message: ");
-        fgets(buffer, sizeof(buffer), stdin);
-        buffer[strcspn(buffer, "\n")] = 0;  // Remove trailing newline char from buffer, fgets does not remove it.
+        if (fgets(buffer, sizeof(buffer), stdin) == NULL) {
+            // Handle fgets error or end of file
+            perror("fgets");
+            close(fd);
+            exit(-1);
+        }
+
+        // Remove trailing newline character from buffer
+        buffer[strcspn(buffer, "\n")] = 0;
+
+        // Check if the input is empty
+        if (strlen(buffer) == 0) {
+            buffer[0] = '\0';
+        }
+
         ssize_t bytes_sent = send(fd, buffer, strlen(buffer), 0);
         if (bytes_sent < 0) {
             perror("send");
@@ -49,7 +62,7 @@ int main() {
             exit(-1);
         }
 
-        if (strncmp(buffer, "BYE!", 4) == 0) {
+        if (strncmp(buffer, "BYE!", 4) == 0 || strlen(buffer) == 0) {
             // Client has closed the connection.
             close(fd);
             break;
@@ -65,6 +78,7 @@ int main() {
         }
         printf("Server response: %s\n", buffer);
     }
+
 
     close(fd);
     return 0;
