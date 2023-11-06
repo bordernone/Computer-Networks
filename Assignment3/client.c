@@ -1,15 +1,10 @@
-#include <stdio.h> // header for input and output from console : printf, perror
-#include<string.h> // strcmp
-#include<sys/socket.h> // for socket related functions
-#include<arpa/inet.h> // htons
-#include <netinet/in.h> // structures for addresses
-
-#include<unistd.h> // contains fork() and unix standard functions
-#include<stdlib.h>
-
-
-#include<unistd.h> // header for unix specic functions declarations : fork(), getpid(), getppid()
-#include<stdlib.h> // header for general functions declarations: exit()
+#include <stdio.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <unistd.h>
+#include <stdlib.h>
 
 int main() {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -19,8 +14,10 @@ int main() {
     }
 
     // Set socket options to reuse the same address and port.
-    if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int)) < 0) {
+    int value = 1;
+    if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &value, sizeof(value)) < 0) {
         perror("setsockopt");
+        close(fd);
         exit(-1);
     }
 
@@ -33,28 +30,38 @@ int main() {
     // Connect to the server.
     if (connect(fd, (struct sockaddr *)&serverAddr, sizeof(serverAddr)) < 0) {
         perror("connect");
+        close(fd);
         exit(-1);
     }
 
-    // Get my ip address and port
+    // Get my IP address and port.
     struct sockaddr_in myAddr;
     bzero(&myAddr, sizeof(myAddr));
     socklen_t len = sizeof(myAddr);
-    getsockname(fd, (struct sockaddr *) &myAddr, &len);
+    if (getsockname(fd, (struct sockaddr *)&myAddr, &len) < 0) {
+        perror("getsockname");
+        close(fd);
+        exit(-1);
+    }
     char myIP[16];
     inet_ntop(AF_INET, &myAddr.sin_addr, myIP, sizeof(myIP));
     unsigned int myPort = ntohs(myAddr.sin_port);
 
-    printf("Local ip address: %s\n", myIP);
-    printf("Local port : %u\n", myPort);
+    printf("Local IP address: %s\n", myIP);
+    printf("Local port: %u\n", myPort);
 
-    // Send a message to the server.
+    // Send and receive data with error handling.
     char buffer[256];
     while (1) {
         printf("Enter a message: ");
         fgets(buffer, sizeof(buffer), stdin);
         buffer[strcspn(buffer, "\n")] = 0;  // Remove trailing newline char from buffer, fgets does not remove it.
-        send(fd, buffer, strlen(buffer), 0);
+        ssize_t bytes_sent = send(fd, buffer, strlen(buffer), 0);
+        if (bytes_sent < 0) {
+            perror("send");
+            close(fd);
+            exit(-1);
+        }
 
         if (strncmp(buffer, "BYE!", 4) == 0) {
             // Client has closed the connection.
@@ -65,9 +72,15 @@ int main() {
 
         // Receive a message from the server.
         bzero(buffer, sizeof(buffer));
-        recv(fd, buffer, sizeof(buffer), 0);
+        ssize_t bytes_received = recv(fd, buffer, sizeof(buffer), 0);
+        if (bytes_received < 0) {
+            perror("recv");
+            close(fd);
+            exit(-1);
+        }
         printf("Server response: %s\n", buffer);
     }
 
+    close(fd);
     return 0;
 }

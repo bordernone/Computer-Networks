@@ -83,8 +83,9 @@ int main() {
         int pid = fork();
         if (pid == 0) {
             // Child process.
+            close(serverFD);
             handleClient(clientFD, clientAddr);
-            break;
+            exit(0);
         } else {
             // Parent process.
             close(clientFD);
