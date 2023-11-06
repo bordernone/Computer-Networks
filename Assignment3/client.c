@@ -32,23 +32,9 @@ int main() {
         perror("connect");
         close(fd);
         exit(-1);
+    } else {
+        printf("Connected to server\n");
     }
-
-    // Get my IP address and port.
-    struct sockaddr_in myAddr;
-    bzero(&myAddr, sizeof(myAddr));
-    socklen_t len = sizeof(myAddr);
-    if (getsockname(fd, (struct sockaddr *)&myAddr, &len) < 0) {
-        perror("getsockname");
-        close(fd);
-        exit(-1);
-    }
-    char myIP[16];
-    inet_ntop(AF_INET, &myAddr.sin_addr, myIP, sizeof(myIP));
-    unsigned int myPort = ntohs(myAddr.sin_port);
-
-    printf("Local IP address: %s\n", myIP);
-    printf("Local port: %u\n", myPort);
 
     // Send and receive data with error handling.
     char buffer[256];
@@ -65,7 +51,6 @@ int main() {
 
         if (strncmp(buffer, "BYE!", 4) == 0) {
             // Client has closed the connection.
-            printf("Connection closed from client side\n");
             close(fd);
             break;
         }

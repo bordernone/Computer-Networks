@@ -12,6 +12,7 @@
 
 int serverFD;
 
+// Handles a client connection.
 void handleClient(int clientFD, struct sockaddr_in clientAddr) {
     printf("[%s:%d] Connected\n", inet_ntoa(clientAddr.sin_addr), ntohs(clientAddr.sin_port));
     char buffer[256];
@@ -19,13 +20,21 @@ void handleClient(int clientFD, struct sockaddr_in clientAddr) {
         // Receive a message from the client.
         bzero(buffer, sizeof(buffer));
         int bytes = recv(clientFD, buffer, sizeof(buffer), 0);
+        
+        if (bytes < 0) {
+            fprintf(stderr, "Error receiving message from client\n");
+            exit(1);
+        } else if (bytes > 0) {
+            // Print the message received from the client.
+            printf("[%s:%d] Received message: %s\n", inet_ntoa(clientAddr.sin_addr), ntohs(clientAddr.sin_port), buffer);
+        }
+        
         if (bytes == 0 || strncmp(buffer, "BYE!", 4) == 0) {
             // Client has closed the connection.
             printf("[%s:%d] Disconnected\n", inet_ntoa(clientAddr.sin_addr), ntohs(clientAddr.sin_port));
             close(clientFD);
             break;
-        }
-        printf("[%s:%d] Received message: %s\n", inet_ntoa(clientAddr.sin_addr), ntohs(clientAddr.sin_port), buffer);
+        }        
 
         // Send back the same message to the client.
         send(clientFD, buffer, strlen(buffer), 0);
@@ -57,16 +66,12 @@ int main() {
     if (bind(serverFD, (struct sockaddr *)&serverAddr, sizeof(serverAddr)) < 0) {
         fprintf(stderr, "Error binding socket\n");
         exit(1);
-    } else {
-        printf("Server has started\n");
     }
 
     // Set up the socket to listen for incoming connections.
     if (listen(serverFD, 5) < 0) {
         fprintf(stderr, "Error listening on socket\n");
         exit(1);
-    } else {
-        printf("Server is listening on port %d\n", PORT);
     }
 
     while (1) {
