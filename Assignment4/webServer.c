@@ -54,7 +54,7 @@ int fileSize(FILE *file) {
 
 // Get the file path of a URI, combine the STATIC_DIR and the URI
 char *getFilePath(char *uri, bool freeOld) { // freeOld is a helper to free the old uri
-    char *filePath = malloc(strlen(STATIC_DIR) + strlen(uri) + 1);
+    char *filePath = calloc(strlen(STATIC_DIR) + strlen(uri) + 1, sizeof(char));
     strcat(filePath, STATIC_DIR); // add the STATIC_DIR
     strcat(filePath, uri); // add the URI
     filePath[strlen(STATIC_DIR) + strlen(uri)] = '\0';
@@ -68,7 +68,7 @@ char *getFilePath(char *uri, bool freeOld) { // freeOld is a helper to free the 
 char *parseURI(char *uri, bool freeOld) {
     // if ends with /, append index.html
     if (uri[strlen(uri) - 1] == '/') {
-        char *newURI = malloc(strlen(uri) + strlen("index.html") + 1);
+        char *newURI = calloc(strlen(uri) + strlen("index.html") + 1, sizeof(char));
         strcpy(newURI, uri);
         strcat(newURI, "index.html");
         if (freeOld) {
@@ -120,7 +120,7 @@ char* stripOffBody(char *request) {
     // Calculate the length of the header
     int lengthBeforeCRLFCRLF = headerEndsAt - request;
     // Copy the header into a new string
-    char *requestWithoutBody = malloc(lengthBeforeCRLFCRLF + 1);
+    char *requestWithoutBody = calloc(lengthBeforeCRLFCRLF + 1, sizeof(char));
     strncpy(requestWithoutBody, request, lengthBeforeCRLFCRLF);
     requestWithoutBody[lengthBeforeCRLFCRLF] = '\0'; // Ensure the string is null-terminated
     return requestWithoutBody;
@@ -135,7 +135,7 @@ struct CharLengthTuple getCurrentFormattedDate() {
     strftime(formattedDate, sizeof(formattedDate), "%a %b %d %H:%M:%S %Y", localtime(&currentTime));
 
     size_t resultSize = strlen(formattedDate) + 1;
-    char *result = (char *)malloc(resultSize);
+    char *result = calloc(resultSize, sizeof(char));
 
     if (result == NULL) {
         perror("Memory allocation failed");
@@ -159,10 +159,10 @@ struct CharLengthTuple buildResponseMessage(const char* contentType, const char*
     struct CharLengthTuple dateTuple = getCurrentFormattedDate();
 
     int headerLength = snprintf(NULL, 0, responseFormat, dateTuple.msg, contentType, bodyLength);
-    int totalLength = headerLength + bodyLength + 1; // Add 1 for the null terminator
+    int totalLength = headerLength + bodyLength; // Add 1 for the null terminator
 
     // Allocate memory for the response message
-    char *responseMessage = (char *)malloc(totalLength);
+    char *responseMessage = calloc(totalLength, sizeof(char));
 
     if (responseMessage == NULL) {
         fprintf(stderr, "Memory allocation error\n");
@@ -174,9 +174,6 @@ struct CharLengthTuple buildResponseMessage(const char* contentType, const char*
 
     // Copy the binary body directly into the response message
     memcpy(responseMessage + headerLength, body, bodyLength);
-
-    // Ensure the response message is null-terminated
-    responseMessage[totalLength - 1] = '\0';
 
     // Free memory
     free(dateTuple.msg);
@@ -206,7 +203,7 @@ struct HttpRequest parseHttpRequest(char *request) {
     strncpy(httpRequest.uri, parseURI(token, false), MAX_URI_LENGTH);
     token = strtok_r(NULL, " ", &saveptr);
     // Remove any end of line characters
-    char *version = malloc(strlen(token) - 2);
+    char *version = calloc(strlen(token) - 2, sizeof(char));
     strncpy(version, token, strlen(token) - 2);
     removeEndOfLine(version);
     strncpy(httpRequest.version, version, MAX_VERSION_LENGTH);
@@ -219,8 +216,14 @@ struct CharLengthTuple getFileContents(const char *filePath, const char* content
     FILE *file;
     // May need to open the file in binary mode depending on the content type
     if (isBinary(contentType)) {
+        if (DEBUG) {
+            printf("Opening file in binary mode %s\n", filePath);
+        }
         file = fopen(filePath, "rb");
     } else {
+        if (DEBUG) {
+            printf("Opening file in text mode %s\n", filePath);
+        }
         file = fopen(filePath, "r");
     }
     if (file == NULL) {
@@ -230,10 +233,10 @@ struct CharLengthTuple getFileContents(const char *filePath, const char* content
         return (struct CharLengthTuple) {"", -1};
     }
     int size = fileSize(file);
-    char *body = malloc(size + 1);
+    char *body = calloc(size + 1, sizeof(char));
     fread(body, size, 1, file);
-    body[size] = '\0';
     fclose(file);
+    body[size] = '\0';
     return (struct CharLengthTuple) {body, size};
 }
 
@@ -254,7 +257,7 @@ struct CharLengthTuple get404Message() {
     char *format = "HTTP/1.0 404 Not Found\r\nServer: SimpleHTTPServer\r\nDate: %s\r\nContent-Type: text/plain\r\nContent-Length: 13\r\n\r\n404 Not Found";
     struct CharLengthTuple dateTuple = getCurrentFormattedDate(); // Get the current date
     int messageLength = snprintf(NULL, 0, format, dateTuple.msg);
-    char *message = malloc(messageLength + 1);
+    char *message = calloc(messageLength + 1, sizeof(char));
     sprintf(message, format, dateTuple.msg); // Build the message
     message[messageLength] = '\0';
     free(dateTuple.msg);
@@ -266,7 +269,7 @@ void handleRequest(struct ClientTuple clientTuple) {
     int clientFD = clientTuple.clientFD;
 
     // Read the request
-    char *request = malloc(MAX_REQUEST_LENGTH);
+    char *request = calloc(MAX_REQUEST_LENGTH, sizeof(char));
     int bytesRead = read(clientFD, request, MAX_REQUEST_LENGTH);
     if (bytesRead < 0) {
         printf("Error reading\n");
