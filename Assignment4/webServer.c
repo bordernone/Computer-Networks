@@ -20,21 +20,31 @@
 #define MAX_REQUEST_LENGTH (MAX_METHOD_LENGTH + MAX_VERSION_LENGTH + MAX_URI_LENGTH + MAX_HEADER_LENGTH + MAX_BODY_LENGTH)
 #define CRLFCRLF "\r\n\r\n"
 
+// Struct to store the parsed HTTP request
 struct HttpRequest {
     char method[MAX_METHOD_LENGTH];
     char uri[MAX_URI_LENGTH];
     char version[MAX_VERSION_LENGTH];
-    char headers[MAX_HEADER_LENGTH];
-    char body[MAX_BODY_LENGTH];
+    char headers[MAX_HEADER_LENGTH]; // Not used for now
+    char body[MAX_BODY_LENGTH]; // Not used for now
 };
 
+// Struct to store the tuple of a char array and its length
 struct CharLengthTuple {
     char *msg;
     int length;
 };
 
+// Struct to store the client socket file descriptor and its address, easy to pass to a thread
+struct ClientTuple {
+    int clientFD;
+    struct sockaddr_in clientAddr;
+};
+
+// The directory to serve static files from. This is relative to the directory where the executable is run
 char STATIC_DIR[] = "assignment3_files";
 
+// Get the size of a file
 int fileSize(FILE *file) {
     fseek(file, 0L, SEEK_END);
     int size = ftell(file);
@@ -42,10 +52,11 @@ int fileSize(FILE *file) {
     return size;
 }
 
-char *getFilePath(char *uri, bool freeOld) {
+// Get the file path of a URI, combine the STATIC_DIR and the URI
+char *getFilePath(char *uri, bool freeOld) { // freeOld is a helper to free the old uri
     char *filePath = malloc(strlen(STATIC_DIR) + strlen(uri) + 1);
-    strcat(filePath, STATIC_DIR);
-    strcat(filePath, uri);
+    strcat(filePath, STATIC_DIR); // add the STATIC_DIR
+    strcat(filePath, uri); // add the URI
     filePath[strlen(STATIC_DIR) + strlen(uri)] = '\0';
     if (freeOld) {
         free(uri);
@@ -53,6 +64,7 @@ char *getFilePath(char *uri, bool freeOld) {
     return filePath;
 }
 
+// Parse the URI, if it ends with /, append index.html
 char *parseURI(char *uri, bool freeOld) {
     // if ends with /, append index.html
     if (uri[strlen(uri) - 1] == '/') {
@@ -68,9 +80,11 @@ char *parseURI(char *uri, bool freeOld) {
     }
 }
 
+// Get the content type of a resource
 char* getContentType(char *resource) {
     char *extension = strrchr(resource, '.');
     if (extension == NULL) {
+        // No extension, return text/plain. This can be useful if server wants to respond with a string, probably not useful for this assignment
         return "text/plain";
     }
     if (strcmp(extension, ".html") == 0) {
@@ -90,24 +104,29 @@ char* getContentType(char *resource) {
     }
 }
 
+// Check if the content should be sent as binary
 bool isBinary(const char *contentType) {
     return strcmp(contentType, "image/png") == 0 || strcmp(contentType, "image/jpg") == 0 || strcmp(contentType, "image/gif") == 0 || strcmp(contentType, "image/jpeg") == 0;
 }
 
+// Strip off the body of a request since we don't need it for this assignment
 char* stripOffBody(char *request) {
+    // Find the end of the header
     char *headerEndsAt = strstr(request, CRLFCRLF);
     if (headerEndsAt == 0) {
         printf("Error parsing request\n");
         exit(1);
     }
+    // Calculate the length of the header
     int lengthBeforeCRLFCRLF = headerEndsAt - request;
-    
+    // Copy the header into a new string
     char *requestWithoutBody = malloc(lengthBeforeCRLFCRLF + 1);
     strncpy(requestWithoutBody, request, lengthBeforeCRLFCRLF);
-    requestWithoutBody[lengthBeforeCRLFCRLF] = '\0';
+    requestWithoutBody[lengthBeforeCRLFCRLF] = '\0'; // Ensure the string is null-terminated
     return requestWithoutBody;
 }
 
+// Get the current date and time in proper format
 struct CharLengthTuple getCurrentFormattedDate() {
     time_t currentTime;
     time(&currentTime);
@@ -132,7 +151,9 @@ struct CharLengthTuple getCurrentFormattedDate() {
     return resultTuple;
 }
 
+// Build the response message based on the content type and body. Runs only when the file exists
 struct CharLengthTuple buildResponseMessage(const char* contentType, const char* body, int bodyLength) {
+    // Define the format of the response header
     const char* responseFormat = "HTTP/1.0 200 OK\r\nServer: SimpleHTTPServer\r\nDate: %s\r\nContent-Type: %s\r\nContent-Length: %d\r\n\r\n";
 
     struct CharLengthTuple dateTuple = getCurrentFormattedDate();
@@ -140,6 +161,7 @@ struct CharLengthTuple buildResponseMessage(const char* contentType, const char*
     int headerLength = snprintf(NULL, 0, responseFormat, dateTuple.msg, contentType, bodyLength);
     int totalLength = headerLength + bodyLength + 1; // Add 1 for the null terminator
 
+    // Allocate memory for the response message
     char *responseMessage = (char *)malloc(totalLength);
 
     if (responseMessage == NULL) {
@@ -161,25 +183,41 @@ struct CharLengthTuple buildResponseMessage(const char* contentType, const char*
     return (struct CharLengthTuple) {responseMessage, totalLength};
 }
 
+// Remove the end of line characters from a string
+void removeEndOfLine(char *str) {
+    size_t len = strlen(str);
 
+    for (size_t i = 0; i < len; i++) {
+        if (str[i] == '\n' || str[i] == '\r') {
+            str[i] = '\0';
+        }
+    }
+}
+
+// Parse the HTTP request
 struct HttpRequest parseHttpRequest(char *request) {
     struct HttpRequest httpRequest;
     char *saveptr;
-
+    // Remove any body content
     char *requestWithoutBody = stripOffBody(request);
     char *token = strtok_r(requestWithoutBody, " ", &saveptr);
     strncpy(httpRequest.method, token, MAX_METHOD_LENGTH);
     token = strtok_r(NULL, " ", &saveptr);
     strncpy(httpRequest.uri, parseURI(token, false), MAX_URI_LENGTH);
     token = strtok_r(NULL, " ", &saveptr);
-    strncpy(httpRequest.version, token, MAX_VERSION_LENGTH);
+    // Remove any end of line characters
+    char *version = malloc(strlen(token) - 2);
+    strncpy(version, token, strlen(token) - 2);
+    removeEndOfLine(version);
+    strncpy(httpRequest.version, version, MAX_VERSION_LENGTH);
 
     return httpRequest;
 }
 
-
+// Get the contents of a file along with its length
 struct CharLengthTuple getFileContents(const char *filePath, const char* contentType) {
     FILE *file;
+    // May need to open the file in binary mode depending on the content type
     if (isBinary(contentType)) {
         file = fopen(filePath, "rb");
     } else {
@@ -199,6 +237,7 @@ struct CharLengthTuple getFileContents(const char *filePath, const char* content
     return (struct CharLengthTuple) {body, size};
 }
 
+// Check if a file exists
 bool fileExists(const char *filePath) {
     FILE *file = fopen(filePath, "r");
     if (file == NULL) {
@@ -209,18 +248,23 @@ bool fileExists(const char *filePath) {
     }
 }
 
+// Get the 404 message
 struct CharLengthTuple get404Message() {
+    // Define the format of the response header
     char *format = "HTTP/1.0 404 Not Found\r\nServer: SimpleHTTPServer\r\nDate: %s\r\nContent-Type: text/plain\r\nContent-Length: 13\r\n\r\n404 Not Found";
-    struct CharLengthTuple dateTuple = getCurrentFormattedDate();
+    struct CharLengthTuple dateTuple = getCurrentFormattedDate(); // Get the current date
     int messageLength = snprintf(NULL, 0, format, dateTuple.msg);
     char *message = malloc(messageLength + 1);
-    sprintf(message, format, dateTuple.msg);
+    sprintf(message, format, dateTuple.msg); // Build the message
     message[messageLength] = '\0';
     free(dateTuple.msg);
     return (struct CharLengthTuple) {message, messageLength};
 }
 
-void handleRequest(int clientFD) {
+// Handle a request independently
+void handleRequest(struct ClientTuple clientTuple) {
+    int clientFD = clientTuple.clientFD;
+
     // Read the request
     char *request = malloc(MAX_REQUEST_LENGTH);
     int bytesRead = read(clientFD, request, MAX_REQUEST_LENGTH);
@@ -228,7 +272,8 @@ void handleRequest(int clientFD) {
         printf("Error reading\n");
         return;
     }
-
+    
+    // Parse the request
     struct HttpRequest httpRequest = parseHttpRequest(request);
 
     // Print the request
@@ -247,7 +292,6 @@ void handleRequest(int clientFD) {
 
     // Prepare the response
     char *contentType = getContentType(httpRequest.uri);
-    printf("Content-Type: %s\n", contentType);
     char *filePath = getFilePath(httpRequest.uri, false);
     struct CharLengthTuple fileContents = getFileContents(filePath, contentType);
 
@@ -271,6 +315,13 @@ void handleRequest(int clientFD) {
         printf("Sent %d bytes\n", bytesSent);
     }
 
+    // Print server log. Format: 127.0.0.1 [13/Mar/2022 12:23:06] "GET /index.html HTTP/1.1" 200
+    time_t t;
+    time(&t);
+    char formattedTime[30];
+    strftime(formattedTime, sizeof(formattedTime), "%d/%b/%Y %H:%M:%S", localtime(&t));
+    printf("%s [%s] \"%s %s %s\" %d\n", inet_ntoa(clientTuple.clientAddr.sin_addr), formattedTime, httpRequest.method, httpRequest.uri, httpRequest.version, fileContents.length == -1 ? 404 : 200);
+
     // Free memory
     free(filePath);
     free(responseHelper.msg);
@@ -281,10 +332,11 @@ void handleRequest(int clientFD) {
     close(clientFD);
 }
 
+// Handle a request in a thread
 void *handleRequestThread(void *arg) {
-    int clientFD = *(int *)arg;
-    handleRequest(clientFD);
-    return NULL;
+    struct ClientTuple clientTuple = *(struct ClientTuple *)arg;
+    handleRequest(clientTuple);
+    return NULL; // Return NULL such that the thread runs in detached mode
 }
 
 int main() {
@@ -301,7 +353,7 @@ int main() {
     // Bind the socket to an IP address and port
     struct sockaddr_in serverAddr;
     serverAddr.sin_family = AF_INET;
-    serverAddr.sin_port = htons(80);
+    serverAddr.sin_port = htons(80); // Port 80
     serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
     if (bind(serverFD, (struct sockaddr *) &serverAddr, sizeof(serverAddr)) < 0) {
         printf("Error binding\n");
@@ -323,12 +375,16 @@ int main() {
             printf("Error accepting\n");
             return 1;
         } else {
+            // Handle the request in a new thread
             pthread_t thread;
-            pthread_create(&thread, NULL, handleRequestThread, &clientFD);
+            struct ClientTuple *clientTuple = malloc(sizeof(struct ClientTuple));
+            clientTuple->clientFD = clientFD;
+            clientTuple->clientAddr = clientAddr;
+            pthread_create(&thread, NULL, handleRequestThread, clientTuple);
         }
     }
     
     // Close the socket
     close(serverFD);
-    return  0;
+    return 0;
 }
