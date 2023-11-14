@@ -356,7 +356,7 @@ int main() {
     serverAddr.sin_port = htons(80); // Port 80
     serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
     if (bind(serverFD, (struct sockaddr *) &serverAddr, sizeof(serverAddr)) < 0) {
-        printf("Error binding\n");
+        printf("Error binding. There may be other services running on 80. Try closing other programs and run this as root.\n");
         return 1;
     }
 
